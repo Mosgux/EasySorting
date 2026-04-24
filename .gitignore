@@ -1,6 +1,6 @@
-backend/__pycache__/
+**/__pycache__/
 backend/temp/
-backend/*.pyc
+*.pyc
 backend/easysorting.db
 
 frontend/node_modules/
@@ -9,3 +9,6 @@ frontend/.DS_Store
 
 .vscode/
 *.log
+/*.xls
+/*.xlsx
+/屏幕截图 *.png
