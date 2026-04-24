@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # EasySorting
 
 EasySorting 是一个面向电赛/硬件打样场景的元器件库存管理工具，支持 BOM 匹配、订单入库、库存维护和采购单导出。
@@ -177,4 +176,3 @@ npm run dev
 
 - 本项目默认面向本地单用户使用。
 - SQLite 数据库文件位于 `backend/easysorting.db`，已通过 `.gitignore` 排除，不纳入仓库版本控制。
->>>>>>> 07702bbb06948cb56d461e0e836acfb933b6b9d6
