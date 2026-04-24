@@ -158,6 +158,7 @@ def get_history(db: Session = Depends(get_db)):
             batches[h.batch_id] = {
                 "batch_id":   h.batch_id,
                 "created_at": h.created_at.isoformat() if h.created_at else None,
+                "rolled_back": h.rolled_back,
                 "items":      [],
             }
         batches[h.batch_id]["items"].append({
@@ -170,3 +171,43 @@ def get_history(db: Session = Depends(get_db)):
             "quantity_added":   h.quantity_added,
         })
     return list(batches.values())
+
+
+@router.post("/rollback/{batch_id}")
+def rollback_stock_in(batch_id: str, db: Session = Depends(get_db)):
+    """
+    整批次回滚入库操作：
+    - 将该批次所有记录的入库量从对应元件库存中减回（最低为 0）；
+    - 标记批次为 rolled_back=True；
+    - 防止重复回滚。
+    """
+    records = (
+        db.query(StockInHistory)
+        .filter(StockInHistory.batch_id == batch_id)
+        .all()
+    )
+    if not records:
+        raise HTTPException(status_code=404, detail="找不到该入库批次")
+
+    if any(r.rolled_back for r in records):
+        raise HTTPException(status_code=400, detail="该批次已回滚，不可重复操作")
+
+    restored_count = 0
+    for h in records:
+        comp = None
+        if h.lcsc_id:
+            comp = db.query(Component).filter(Component.lcsc_id == h.lcsc_id).first()
+        if not comp and h.model and h.package:
+            comp = (
+                db.query(Component)
+                .filter(Component.model == h.model, Component.package == h.package)
+                .first()
+            )
+        if comp:
+            comp.quantity = max(0, comp.quantity - h.quantity_added)
+            comp.updated_at = datetime.utcnow()
+        h.rolled_back = True
+        restored_count += 1
+
+    db.commit()
+    return {"ok": True, "restored_count": restored_count}

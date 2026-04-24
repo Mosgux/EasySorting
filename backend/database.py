@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 import os
 
@@ -19,3 +19,19 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def run_migrations():
+    """应用启动时执行轻量级字段迁移，确保旧数据库兼容新字段。"""
+    migrations = [
+        # stock_in_history 新增 rolled_back 列
+        "ALTER TABLE stock_in_history ADD COLUMN rolled_back BOOLEAN DEFAULT 0",
+    ]
+    with engine.connect() as conn:
+        for stmt in migrations:
+            try:
+                conn.execute(text(stmt))
+                conn.commit()
+            except Exception:
+                # 列已存在时 SQLite 会报错，直接忽略
+                pass

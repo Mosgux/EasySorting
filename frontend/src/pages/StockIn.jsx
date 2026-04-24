@@ -30,7 +30,7 @@ import {
   HistoryOutlined,
   CloudUploadOutlined,
 } from "@ant-design/icons";
-import { stockInApi } from "../api";
+import { stockInApi, stockOutApi } from "../api";
 import { getTypeColor } from "../utils/type_color";
 
 const { Title, Text } = Typography;
@@ -71,7 +71,10 @@ export default function StockIn() {
   const [selectedKeys, setSelectedKeys] = useState([]);
   const [step, setStep] = useState(0); // 0=上传 1=预览 2=完成
   const [history, setHistory] = useState([]);
+  const [stockOutHistory, setStockOutHistory] = useState([]);
   const [historyVisible, setHistoryVisible] = useState(false);
+  const [historyTab, setHistoryTab] = useState("stock_in");
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [manualQtys, setManualQtys] = useState({});
   const [needDivisor, setNeedDivisor] = useState(1);
   const [editVisible, setEditVisible] = useState(false);
@@ -283,10 +286,39 @@ export default function StockIn() {
   };
 
   const loadHistory = async () => {
+    setHistoryLoading(true);
     try {
+      const [inData, outData] = await Promise.all([
+        stockInApi.history(),
+        stockOutApi.history(),
+      ]);
+      setHistory(inData || []);
+      setStockOutHistory(outData || []);
+      setHistoryVisible(true);
+    } catch (e) {
+      message.error(e.message);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const handleRollbackStockIn = async (batchId) => {
+    try {
+      await stockInApi.rollback(batchId);
+      message.success("入库批次已回滚，库存已恢复");
       const data = await stockInApi.history();
       setHistory(data || []);
-      setHistoryVisible(true);
+    } catch (e) {
+      message.error(e.message);
+    }
+  };
+
+  const handleRollbackStockOut = async (batchId) => {
+    try {
+      await stockOutApi.rollback(batchId);
+      message.success("出库批次已回滚，库存已恢复");
+      const data = await stockOutApi.history();
+      setStockOutHistory(data || []);
     } catch (e) {
       message.error(e.message);
     }
@@ -436,6 +468,37 @@ export default function StockIn() {
     },
   ];
 
+  const stockOutCols = [
+    { title: "立创编号", dataIndex: "lcsc_id", width: 100 },
+    { title: "型号", dataIndex: "model", ellipsis: true },
+    { title: "封装", dataIndex: "package", width: 110 },
+    { title: "位号", dataIndex: "designator", ellipsis: true, width: 140 },
+    {
+      title: "出库量",
+      dataIndex: "quantity_out",
+      width: 70,
+      align: "right",
+      render: (v) => (
+        <Text style={{ color: "#fa8c16", fontWeight: 600 }}>-{v}</Text>
+      ),
+    },
+    {
+      title: "出库前",
+      dataIndex: "quantity_before",
+      width: 70,
+      align: "right",
+    },
+    {
+      title: "出库后",
+      dataIndex: "quantity_after",
+      width: 70,
+      align: "right",
+      render: (v) => (
+        <Text style={{ color: v <= 0 ? "#ff4d4f" : undefined }}>{v}</Text>
+      ),
+    },
+  ];
+
   return (
     <div>
       <Title level={3}>元件入库</Title>
@@ -523,9 +586,10 @@ export default function StockIn() {
                   size="large"
                   block
                   onClick={loadHistory}
+                  loading={historyLoading}
                   icon={<HistoryOutlined />}
                 >
-                  入库历史
+                  操作历史
                 </Button>
               </Space>
             </Col>
@@ -683,7 +747,7 @@ export default function StockIn() {
               继续入库
             </Button>
             <Button onClick={loadHistory} icon={<HistoryOutlined />}>
-              查看历史
+              查看操作历史
             </Button>
           </Space>
         </Card>
@@ -691,26 +755,119 @@ export default function StockIn() {
 
       {/* ── 历史弹窗 ── */}
       <Modal
-        title="入库历史记录"
+        title="操作历史"
         open={historyVisible}
         onCancel={() => setHistoryVisible(false)}
         footer={null}
-        width={800}
+        width={900}
       >
-        <Collapse
-          items={(history || []).map((b, i) => ({
-            key: i,
-            label: `批次 ${b.batch_id.slice(0, 8)}…  入库时间: ${b.created_at?.slice(0, 16) || "-"}  共 ${b.items?.length} 种`,
-            children: (
-              <Table
-                rowKey="id"
-                columns={histCols}
-                dataSource={b.items}
-                size="small"
-                pagination={false}
-              />
-            ),
-          }))}
+        <Tabs
+          activeKey={historyTab}
+          onChange={setHistoryTab}
+          items={[
+            {
+              key: "stock_in",
+              label: `入库记录（${history.length} 批次）`,
+              children: (
+                <Collapse
+                  items={(history || []).map((b, i) => ({
+                    key: i,
+                    label: (
+                      <Space>
+                        <Text>
+                          批次 {b.batch_id.slice(0, 8)}… &nbsp;&nbsp;入库时间:{" "}
+                          {b.created_at?.slice(0, 16) || "-"}
+                          &nbsp;&nbsp;共 {b.items?.length} 种
+                        </Text>
+                        {b.rolled_back && <Tag color="default">已回滚</Tag>}
+                      </Space>
+                    ),
+                    extra: b.rolled_back ? (
+                      <Tag color="default">已回滚</Tag>
+                    ) : (
+                      <Button
+                        size="small"
+                        danger
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          Modal.confirm({
+                            title: "确认回滚此入库批次？",
+                            content: `将撤销该批次 ${b.items?.length} 种元件的入库操作，库存数量会相应减少。`,
+                            okText: "确认回滚",
+                            okType: "danger",
+                            cancelText: "取消",
+                            onOk: () => handleRollbackStockIn(b.batch_id),
+                          });
+                        }}
+                      >
+                        回滚
+                      </Button>
+                    ),
+                    children: (
+                      <Table
+                        rowKey="id"
+                        columns={histCols}
+                        dataSource={b.items}
+                        size="small"
+                        pagination={false}
+                      />
+                    ),
+                  }))}
+                />
+              ),
+            },
+            {
+              key: "stock_out",
+              label: `出库记录（${stockOutHistory.length} 批次）`,
+              children: (
+                <Collapse
+                  items={(stockOutHistory || []).map((b, i) => ({
+                    key: i,
+                    label: (
+                      <Space>
+                        <Text>
+                          批次 {b.batch_id.slice(0, 8)}… &nbsp;&nbsp;出库时间:{" "}
+                          {b.created_at?.slice(0, 16) || "-"}
+                          &nbsp;&nbsp;共 {b.items?.length} 种
+                        </Text>
+                        {b.rolled_back && <Tag color="default">已回滚</Tag>}
+                      </Space>
+                    ),
+                    extra: b.rolled_back ? (
+                      <Tag color="default">已回滚</Tag>
+                    ) : (
+                      <Button
+                        size="small"
+                        danger
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          Modal.confirm({
+                            title: "确认回滚此出库批次？",
+                            content: `将撤销该批次 ${b.items?.length} 种元件的出库操作，库存数量会相应恢复。`,
+                            okText: "确认回滚",
+                            okType: "danger",
+                            cancelText: "取消",
+                            onOk: () => handleRollbackStockOut(b.batch_id),
+                          });
+                        }}
+                      >
+                        回滚
+                      </Button>
+                    ),
+                    children: (
+                      <Table
+                        rowKey="id"
+                        columns={stockOutCols}
+                        dataSource={b.items}
+                        size="small"
+                        pagination={false}
+                      />
+                    ),
+                  }))}
+                />
+              ),
+            },
+          ]}
         />
       </Modal>
 

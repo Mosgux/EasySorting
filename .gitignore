@@ -3,6 +3,7 @@ backend/temp/*
 !backend/temp/.gitkeep
 *.pyc
 backend/easysorting.db
+backend/venv/
 
 frontend/node_modules/
 frontend/.DS_Store
