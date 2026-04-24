@@ -503,7 +503,7 @@ export default function StockIn() {
     <div>
       <Title level={3}>元件入库</Title>
       <Text type="secondary">
-        下单完成后，上传订单详情与BOM报价单，计算并确认差量入库。
+        下单完成后，上传 BOM 报价单；如需按订单差量入库，可再附带订单详情。
       </Text>
 
       <Divider />
@@ -596,7 +596,7 @@ export default function StockIn() {
           </Row>
 
           <Card
-            title="如何获取这两个 Excel"
+            title="如何获取导出 Excel"
             size="small"
             style={{ marginTop: 24 }}
           >
@@ -606,7 +606,7 @@ export default function StockIn() {
               style={{ marginBottom: 16 }}
               message={
                 <span>
-                  如果你还没有“下单 BOM 报价单”和“订单详情
+                  如果你还没有“下单 BOM 报价单”，或需要额外导出“订单详情
                   Excel”，可以按下面三步从立创商城导出。第一步入口：
                   <a
                     href="https://bom.szlcsc.com/bom.html"
