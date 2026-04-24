@@ -30,19 +30,19 @@ async def parse_stock_in(
     manual_quantities: Optional[str] = Form(None),  # JSON: {"C12345": 10}
 ):
     """
-    解析订单详情 + BOM报价单，返回入库预览列表。
-    至少需要上传 order_file；bom_quote_file 可选。
-    若不提供 bom_quote_file，可通过 manual_quantities 指定需求数量。
+    解析BOM报价单 + 订单详情，返回入库预览列表。
+    bom_quote_file 必填；order_file 选填（有订单则计算差量，无订单则按报价单采购数量入库）。
     """
-    if not order_file:
-        raise HTTPException(status_code=400, detail="必须上传订单详情文件")
+    if not bom_quote_file:
+        raise HTTPException(status_code=400, detail="必须上传BOM报价单文件")
 
     order_path = bom_path = None
     try:
         # 保存临时文件
-        order_path = os.path.join(TEMP_DIR, f"order_{uuid.uuid4().hex}.xls")
-        with open(order_path, "wb") as f:
-            f.write(await order_file.read())
+        if order_file:
+            order_path = os.path.join(TEMP_DIR, f"order_{uuid.uuid4().hex}.xls")
+            with open(order_path, "wb") as f:
+                f.write(await order_file.read())
 
         if bom_quote_file:
             bom_path = os.path.join(TEMP_DIR, f"bom_quote_{uuid.uuid4().hex}.xls")
@@ -158,6 +158,7 @@ def get_history(db: Session = Depends(get_db)):
             batches[h.batch_id] = {
                 "batch_id":   h.batch_id,
                 "created_at": h.created_at.isoformat() if h.created_at else None,
+                "rolled_back": h.rolled_back,
                 "items":      [],
             }
         batches[h.batch_id]["items"].append({
@@ -170,3 +171,43 @@ def get_history(db: Session = Depends(get_db)):
             "quantity_added":   h.quantity_added,
         })
     return list(batches.values())
+
+
+@router.post("/rollback/{batch_id}")
+def rollback_stock_in(batch_id: str, db: Session = Depends(get_db)):
+    """
+    整批次回滚入库操作：
+    - 将该批次所有记录的入库量从对应元件库存中减回（最低为 0）；
+    - 标记批次为 rolled_back=True；
+    - 防止重复回滚。
+    """
+    records = (
+        db.query(StockInHistory)
+        .filter(StockInHistory.batch_id == batch_id)
+        .all()
+    )
+    if not records:
+        raise HTTPException(status_code=404, detail="找不到该入库批次")
+
+    if any(r.rolled_back for r in records):
+        raise HTTPException(status_code=400, detail="该批次已回滚，不可重复操作")
+
+    restored_count = 0
+    for h in records:
+        comp = None
+        if h.lcsc_id:
+            comp = db.query(Component).filter(Component.lcsc_id == h.lcsc_id).first()
+        if not comp and h.model and h.package:
+            comp = (
+                db.query(Component)
+                .filter(Component.model == h.model, Component.package == h.package)
+                .first()
+            )
+        if comp:
+            comp.quantity = max(0, comp.quantity - h.quantity_added)
+            comp.updated_at = datetime.utcnow()
+        h.rolled_back = True
+        restored_count += 1
+
+    db.commit()
+    return {"ok": True, "restored_count": restored_count}

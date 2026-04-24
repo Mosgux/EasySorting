@@ -26,10 +26,11 @@ import {
 import {
   CloudUploadOutlined,
   DownloadOutlined,
+  ExportOutlined,
   QuestionCircleOutlined,
   DatabaseOutlined,
 } from "@ant-design/icons";
-import { bomFlowApi, inventoryApi } from "../api";
+import { bomFlowApi, inventoryApi, stockOutApi } from "../api";
 
 const { Title, Text } = Typography;
 const { Dragger } = Upload;
@@ -173,6 +174,11 @@ export default function BomFlow() {
   const [inventoryTypeFilter, setInventoryTypeFilter] = useState("全部");
   const [showInStockOnly, setShowInStockOnly] = useState(true);
   const [inventorySortOrder, setInventorySortOrder] = useState("quantity_desc");
+
+  // 出库相关状态
+  const [stockOutModalOpen, setStockOutModalOpen] = useState(false);
+  const [stockOutLoading, setStockOutLoading] = useState(false);
+  const [stockOutResult, setStockOutResult] = useState(null); // { batch_id, success_count, skipped_items }
 
   const replaceItems = (nextItems) => {
     setItems(decorateItems(nextItems));
@@ -328,6 +334,44 @@ export default function BomFlow() {
       message.error(error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // 构造出库条目：仅对 excluded 集合中有 matched_inventory 的项执行出库
+  const buildStockOutItems = () => {
+    return items
+      .filter(
+        (item) =>
+          excluded.has(item.index) && item.matched_inventory?.id != null,
+      )
+      .map((item) => ({
+        component_id: item.matched_inventory.id,
+        lcsc_id: item.matched_inventory.lcsc_id || "",
+        model: item.matched_inventory.model || "",
+        package: item.matched_inventory.package || "",
+        name: item.matched_inventory.name || "",
+        designator: item.designator || "",
+        quantity_out: Number(item.quantity || 0),
+      }));
+  };
+
+  const handleStockOut = async () => {
+    const stockOutItems = buildStockOutItems();
+    if (stockOutItems.length === 0) {
+      message.warning("没有可出库的元件（请先勾选使用库存的行）");
+      return;
+    }
+    setStockOutLoading(true);
+    try {
+      const res = await stockOutApi.confirm(stockOutItems);
+      setStockOutResult(res);
+      if (res.success_count > 0) {
+        message.success(`出库成功：${res.success_count} 种元件`);
+      }
+    } catch (error) {
+      message.error(error.message);
+    } finally {
+      setStockOutLoading(false);
     }
   };
 
@@ -1065,6 +1109,13 @@ export default function BomFlow() {
                   重新开始
                 </Button>
                 <Button
+                  icon={<ExportOutlined />}
+                  disabled={excluded.size === 0}
+                  onClick={() => setStockOutModalOpen(true)}
+                >
+                  执行出库（{buildStockOutItems().length} 种）
+                </Button>
+                <Button
                   type="primary"
                   icon={<DownloadOutlined />}
                   loading={loading}
@@ -1329,6 +1380,162 @@ export default function BomFlow() {
       </Modal>
 
       <style>{`.clickable-row { cursor: pointer; } .clickable-row:hover td { background: #f0f9ff !important; }`}</style>
+
+      {/* ── 出库确认弹窗 ── */}
+      <Modal
+        title="执行出库"
+        open={stockOutModalOpen}
+        onCancel={() => {
+          setStockOutModalOpen(false);
+          setStockOutResult(null);
+        }}
+        footer={
+          stockOutResult ? (
+            <Button
+              onClick={() => {
+                setStockOutModalOpen(false);
+                setStockOutResult(null);
+              }}
+            >
+              关闭
+            </Button>
+          ) : (
+            <Space>
+              <Button onClick={() => setStockOutModalOpen(false)}>取消</Button>
+              <Button
+                type="primary"
+                icon={<ExportOutlined />}
+                loading={stockOutLoading}
+                onClick={handleStockOut}
+              >
+                确认出库
+              </Button>
+            </Space>
+          )
+        }
+        width={760}
+        destroyOnClose
+      >
+        {stockOutResult ? (
+          <>
+            <Alert
+              type={stockOutResult.success_count > 0 ? "success" : "warning"}
+              showIcon
+              style={{ marginBottom: 12 }}
+              message={`出库完成：成功 ${stockOutResult.success_count} 种，跳过 ${stockOutResult.skipped_items?.length || 0} 种`}
+              description={`批次ID：${stockOutResult.batch_id}`}
+            />
+            {stockOutResult.skipped_items?.length > 0 && (
+              <>
+                <Text
+                  type="secondary"
+                  style={{ display: "block", marginBottom: 8 }}
+                >
+                  以下元件因库存不足被跳过：
+                </Text>
+                <Table
+                  rowKey={(r) => r.lcsc_id || r.model}
+                  dataSource={stockOutResult.skipped_items}
+                  size="small"
+                  pagination={false}
+                  columns={[
+                    { title: "立创编号", dataIndex: "lcsc_id", width: 100 },
+                    { title: "型号", dataIndex: "model", ellipsis: true },
+                    { title: "封装", dataIndex: "package", width: 100 },
+                    {
+                      title: "需求量",
+                      dataIndex: "quantity_out",
+                      width: 80,
+                      align: "right",
+                    },
+                    {
+                      title: "可用库存",
+                      dataIndex: "quantity_available",
+                      width: 80,
+                      align: "right",
+                      render: (v) => (
+                        <Text style={{ color: "#ff4d4f" }}>{v ?? "—"}</Text>
+                      ),
+                    },
+                    { title: "原因", dataIndex: "reason", ellipsis: true },
+                  ]}
+                />
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            <Alert
+              type="warning"
+              showIcon
+              style={{ marginBottom: 12 }}
+              message="出库操作会从库存中扣减数量，操作后可在入库历史中回滚。"
+            />
+            <Text
+              type="secondary"
+              style={{ display: "block", marginBottom: 8 }}
+            >
+              即将出库以下元件（库存不足的元件将被跳过）：
+            </Text>
+            <Table
+              rowKey="component_id"
+              dataSource={buildStockOutItems().map((it) => {
+                const bomItem = items.find(
+                  (i) =>
+                    excluded.has(i.index) &&
+                    i.matched_inventory?.id === it.component_id,
+                );
+                return {
+                  ...it,
+                  current_quantity: bomItem?.matched_inventory?.quantity ?? "—",
+                };
+              })}
+              size="small"
+              pagination={{ pageSize: 10 }}
+              columns={[
+                { title: "立创编号", dataIndex: "lcsc_id", width: 100 },
+                { title: "型号", dataIndex: "model", ellipsis: true },
+                { title: "封装", dataIndex: "package", width: 100 },
+                {
+                  title: "位号",
+                  dataIndex: "designator",
+                  ellipsis: true,
+                  width: 140,
+                },
+                {
+                  title: "出库量",
+                  dataIndex: "quantity_out",
+                  width: 80,
+                  align: "right",
+                  render: (v) => (
+                    <Text style={{ color: "#fa8c16", fontWeight: 600 }}>
+                      -{v}
+                    </Text>
+                  ),
+                },
+                {
+                  title: "当前库存",
+                  dataIndex: "current_quantity",
+                  width: 80,
+                  align: "right",
+                  render: (v, r) => (
+                    <Text
+                      style={{
+                        color:
+                          typeof v === "number" && v < r.quantity_out
+                            ? "#ff4d4f"
+                            : "#52c41a",
+                      }}
+                    >
+                      {v}
+                    </Text>
+                  ),
+                },
+              ]}
+            />
+          </>
+        )}
+      </Modal>
     </div>
   );
 }

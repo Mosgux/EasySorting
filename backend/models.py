@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, Boolean
 from datetime import datetime
 from database import Base
 
@@ -32,4 +32,23 @@ class StockInHistory(Base):
     quantity_ordered = Column(Integer)
     quantity_needed = Column(Integer)
     quantity_added = Column(Integer)
+    rolled_back = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class StockOutHistory(Base):
+    __tablename__ = "stock_out_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    batch_id = Column(String(50), index=True)
+    component_id = Column(Integer)          # Component.id
+    lcsc_id = Column(String(50))
+    model = Column(String(255))
+    package = Column(String(100))
+    name = Column(String(255))
+    designator = Column(Text)               # BOM位号（可能很长）
+    quantity_out = Column(Integer)          # 本次出库数量
+    quantity_before = Column(Integer)       # 出库前库存
+    quantity_after = Column(Integer)        # 出库后库存
+    rolled_back = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)

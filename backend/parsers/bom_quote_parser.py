@@ -24,11 +24,16 @@ def parse(file_path: str) -> Tuple[List[Dict[str, Any]], int]:
     ws = wb.sheet_by_index(0)
     sets_count = _parse_sets_count(ws)
 
-    # 自动定位列标题行（含 'Quantity' 且含 'Manufacturer Part'）
+    # 自动定位列标题行
+    # 支持两种格式：
+    #   1. 立创EDA英文BOM报价单（含 'Quantity' 且含 'Manufacturer Part'）
+    #   2. 立创商城网站中文报价单（含 '商品编号'）
     header_row_idx = None
     for i in range(ws.nrows):
         row_vals = [str(ws.cell_value(i, j)).strip() for j in range(ws.ncols)]
-        if 'Quantity' in row_vals and 'Manufacturer Part' in row_vals:
+        is_eng = 'Quantity' in row_vals and 'Manufacturer Part' in row_vals
+        is_chn = '商品编号' in row_vals
+        if is_eng or is_chn:
             header_row_idx = i
             break
 
@@ -64,6 +69,17 @@ def parse(file_path: str) -> Tuple[List[Dict[str, Any]], int]:
         except (ValueError, TypeError):
             return default
 
+    def _gcv_int_first(row_i: int, col_names, default: int = 0) -> int:
+        """在多个候选列名中取第一个有值的整数"""
+        for col_name in col_names:
+            v = _gcv(row_i, col_name, '')
+            if v:
+                try:
+                    return int(float(v))
+                except (ValueError, TypeError):
+                    pass
+        return default
+
     items = []
     for i in range(header_row_idx + 1, ws.nrows):
         lcsc_id = _gcv(i, '商品编号').strip()
@@ -77,14 +93,17 @@ def parse(file_path: str) -> Tuple[List[Dict[str, Any]], int]:
             'manufacturer':      _gcv(i, 'Manufacturer'),
             'footprint_orig':    _gcv(i, 'Footprint'),   # 立创EDA原始封装字符串
             'designator':        _gcv(i, 'Designator'),
-            'quantity_per_set':  _gcv_int(i, 'Quantity'),  # 每套需求数
-            'catalog':           _gcv_first(i, ['目录', '分类', '类别']),
-            'name':              _gcv(i, '商品名称'),
-            'model':             _gcv(i, '型号'),
-            'brand':             _gcv(i, '品牌'),
-            'package':           _gcv(i, '封装'),
-            'spec':              _gcv(i, '参数'),
-            'quantity_purchased': _gcv_int(i, '购买数量'),  # BOM表中实际购买数
+            # 数量：兼容英文EDA格式('Quantity')和中文报价单('数量'/'购买数量'/'采购数量')
+            'quantity_per_set':  _gcv_int_first(i, ['Quantity', '数量', '购买数量', '采购数量']),
+            # 目录/分类 → 元件类型，按列名检索，与列位置无关
+            'catalog':           _gcv_first(i, ['目录', '分类', '类别', 'Category']),
+            # 以下字段均按列名检索，列位置无关
+            'name':              _gcv_first(i, ['商品名称', 'Product Name', 'Description']),
+            'model':             _gcv_first(i, ['型号', 'Manufacturer Part', 'MPN']),
+            'brand':             _gcv_first(i, ['品牌', 'Manufacturer', 'Brand']),
+            'package':           _gcv_first(i, ['封装', 'Footprint', 'Package']),
+            'spec':              _gcv_first(i, ['参数', '规格', 'Specification', 'Specs']),
+            'quantity_purchased': _gcv_int_first(i, ['购买数量', '采购数量', '订购数量']),
         }
         items.append(item)
 

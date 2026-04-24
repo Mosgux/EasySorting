@@ -9,7 +9,10 @@ const api = axios.create({
 api.interceptors.response.use(
   (res) => res.data,
   (err) => {
-    const msg = err?.response?.data?.detail || err.message || "请求失败";
+    const detail = err?.response?.data?.detail;
+    const msg = Array.isArray(detail)
+      ? detail.map((item) => item?.msg || JSON.stringify(item)).join("; ")
+      : detail || err.message || "请求失败";
     return Promise.reject(new Error(msg));
   },
 );
@@ -31,6 +34,14 @@ export const stockInApi = {
     }),
   confirm: (items) => api.post("/stock-in/confirm", { items }),
   history: () => api.get("/stock-in/history"),
+  rollback: (batchId) => api.post(`/stock-in/rollback/${batchId}`),
+};
+
+// ─── 出库 API ─────────────────────────────────────────
+export const stockOutApi = {
+  confirm: (items) => api.post("/stock-out/confirm", { items }),
+  history: () => api.get("/stock-out/history"),
+  rollback: (batchId) => api.post(`/stock-out/rollback/${batchId}`),
 };
 
 // ─── BOM 流程 API（流程A） ────────────────────────────

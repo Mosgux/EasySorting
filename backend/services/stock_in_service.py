@@ -30,22 +30,15 @@ def parse_stock_in(
     manual_quantities: Optional[Dict[str, int]] = None,
 ) -> List[Dict[str, Any]]:
     """
-    解析订单详情与BOM报价单，计算各元件的入库数量。
+    解析BOM报价单（必填）与订单详情（选填），计算各元件的入库数量。
 
-    入库量 = 订单数量 - BOM需求数量(每套×套数)
-    若无BOM报价单，则 BOM需求数量 从 manual_quantities 获取，
-    若两者均无，入库量 = 订单数量（全入库）。
+    有订单：入库量 = 订单采购量 - BOM需求量(每套×套数)
+    无订单：入库量 = 报价单购买数量 - BOM需求量(每套×套数)，均为0时全量入库
+    元件名称/类型/型号/封装/参数 全部来自报价单。
 
     返回预览列表，包含 will_stock / quantity_to_stock 字段。
     """
-    # 解析订单详情
-    order_items: Dict[str, Dict] = {}
-    if order_file_path:
-        for item in order_parser.parse(order_file_path):
-            if item['lcsc_id']:
-                order_items[item['lcsc_id']] = item
-
-    # 解析BOM报价单
+    # 解析BOM报价单（必填）
     bom_items: Dict[str, Dict] = {}
     sets_count = 1
     if bom_quote_file_path:
@@ -54,28 +47,36 @@ def parse_stock_in(
             if item['lcsc_id']:
                 bom_items[item['lcsc_id']] = item
 
+    # 解析订单详情（选填）
+    order_items: Dict[str, Dict] = {}
+    if order_file_path:
+        for item in order_parser.parse(order_file_path):
+            if item['lcsc_id']:
+                order_items[item['lcsc_id']] = item
+
     preview: List[Dict] = []
-    for lcsc_id, order in order_items.items():
-        bom = bom_items.get(lcsc_id, {})
 
-        qty_ordered = order.get('quantity_ordered', 0)
+    # 以报价单为主迭代，订单数据仅用于获取采购量
+    for lcsc_id, bom in bom_items.items():
+        order = order_items.get(lcsc_id, {})
 
-        # 计算需求数量
-        if bom:
-            qty_needed = (bom.get('quantity_per_set') or 0) * sets_count
-        elif manual_quantities and lcsc_id in manual_quantities:
-            qty_needed = manual_quantities[lcsc_id]
+        qty_needed = (bom.get('quantity_per_set') or 0) * sets_count
+
+        if order:
+            # 有订单：以订单实际采购量为准
+            qty_ordered = order.get('quantity_ordered', 0)
         else:
-            qty_needed = 0  # 无BOM信息时全量入库
+            # 无订单：以报价单的购买数量为采购量
+            qty_ordered = bom.get('quantity_purchased') or qty_needed or 0
 
         qty_to_stock = qty_ordered - qty_needed
 
-        # 聚合元件信息
-        name    = order.get('name') or bom.get('name', '')
-        model   = order.get('model') or bom.get('model', '')
-        package = order.get('package') or bom.get('package', '')
-        spec    = bom.get('spec', '')
-        comp_type = _resolve_component_type(order, bom)
+        # 全部来自报价单
+        name      = bom.get('name', '')
+        model     = bom.get('model', '')
+        package   = bom.get('package', '')
+        spec      = bom.get('spec', '')
+        comp_type = _resolve_component_type({}, bom)
 
         val_str = _extract_value_str(name)
         value_norm, value_unit = normalize_value(val_str, comp_type)
