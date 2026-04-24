@@ -23,17 +23,14 @@ start.bat  一键启动脚本，自动安装缺失后端依赖
 release/   本地生成的发布压缩包
 ```
 
-## 本地启动
+## 快速开始
 
-### 方式一：一键启动
+1. 安装 [Python 3](https://www.python.org/downloads/)（安装时勾选 **Add Python to PATH**）
+2. 双击 `start.bat`
 
-直接运行 [start.bat](start.bat)。
+首次运行会自动创建虚拟环境并安装依赖（约需几分钟），之后每次启动只需几秒。浏览器会自动打开 `http://127.0.0.1:8000`。关闭命令行窗口即停止服务。
 
-- 使用系统已安装的 Python 3 启动，不创建虚拟环境。
-- 如缺少后端依赖，会自动按 [backend/requirements.txt](backend/requirements.txt) 安装。
-- 发布包模式下直接访问 http://127.0.0.1:8000 ，无需再单独启动前端开发服务器。
-
-### 方式二：手动启动
+## 开发启动
 
 后端：
 
@@ -52,7 +49,7 @@ npm run dev
 
 默认访问地址：
 
-- 前端：http://localhost:5173
+- 前端开发服务器：http://localhost:5173
 - 后端健康检查：http://localhost:8000/api/health
 
 ## 使用流程

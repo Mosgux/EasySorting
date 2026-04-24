@@ -17,7 +17,7 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="EasySorting",
-    description="鐢佃禌鍏冨櫒浠跺簱瀛樼鐞嗙郴缁?,
+    description="Electronic component inventory management",
     version="1.0.0",
 )
 
