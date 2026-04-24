@@ -1,0 +1,11 @@
+backend/__pycache__/
+backend/temp/
+backend/*.pyc
+backend/easysorting.db
+
+frontend/node_modules/
+frontend/dist/
+frontend/.DS_Store
+
+.vscode/
+*.log
