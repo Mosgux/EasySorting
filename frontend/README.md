@@ -1,16 +1,34 @@
-# React + Vite
+# Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+这是 EasySorting 的前端项目，基于 React + Vite + Ant Design 实现。
 
-Currently, two official plugins are available:
+## 常用命令
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+安装依赖：
 
-## React Compiler
+```powershell
+npm install
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+开发模式：
 
-## Expanding the ESLint configuration
+```powershell
+npm run dev
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+生产构建：
+
+```powershell
+npm run build
+```
+
+## 页面说明
+
+- 元件入库：导入订单详情与 BOM 报价单，确认并写入库存。
+- 库存管理：搜索、编辑、批量删除、批量调整库存数量。
+- BOM 匹配导出：原始 BOM 匹配库存，确认后导出采购单。
+
+## 说明
+
+- 前端默认通过 Vite 代理访问本地后端接口。
+- 仓库级说明请见根目录 [readme.md](../readme.md)。
