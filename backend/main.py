@@ -1,17 +1,23 @@
 # -*- coding: utf-8 -*-
-"""FastAPI 应用入口"""
-from fastapi import FastAPI
+"""FastAPI 搴旂敤鍏ュ彛"""
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from database import Base, engine
 from routers import inventory, stock_in, bom_flow
 
-# 初始化数据库表
+ROOT_DIR = Path(__file__).resolve().parent.parent
+FRONTEND_DIST_DIR = ROOT_DIR / "frontend" / "dist"
+
+# 鍒濆鍖栨暟鎹簱琛?
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="EasySorting",
-    description="电赛元器件库存管理系统",
+    description="鐢佃禌鍏冨櫒浠跺簱瀛樼鐞嗙郴缁?,
     version="1.0.0",
 )
 
@@ -31,3 +37,26 @@ app.include_router(bom_flow.router)
 @app.get("/api/health")
 def health():
     return {"status": "ok", "name": "EasySorting"}
+
+
+if FRONTEND_DIST_DIR.exists():
+    @app.get("/", include_in_schema=False)
+    def serve_root():
+        return FileResponse(FRONTEND_DIST_DIR / "index.html")
+
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    def serve_frontend(full_path: str):
+        if full_path == "api" or full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not Found")
+
+        asset_path = (FRONTEND_DIST_DIR / full_path).resolve()
+        try:
+            asset_path.relative_to(FRONTEND_DIST_DIR.resolve())
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail="Not Found") from exc
+
+        if asset_path.is_file():
+            return FileResponse(asset_path)
+
+        return FileResponse(FRONTEND_DIST_DIR / "index.html")
