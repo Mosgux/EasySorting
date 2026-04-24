@@ -1,10 +1,10 @@
 **/__pycache__/
-backend/temp/
+backend/temp/*
+!backend/temp/.gitkeep
 *.pyc
 backend/easysorting.db
 
 frontend/node_modules/
-frontend/dist/
 frontend/.DS_Store
 
 .vscode/
