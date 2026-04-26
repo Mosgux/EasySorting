@@ -247,7 +247,7 @@ export default function Inventory() {
       render: (v) =>
         v ? (
           <a
-            href={`https://item.szlcsc.com/${v.replace("C", "")}.html`}
+            href={`https://so.szlcsc.com/global.html?k=${v}`}
             target="_blank"
             rel="noreferrer"
           >
