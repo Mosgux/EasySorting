@@ -25,5 +25,7 @@ if errorlevel 1 (
 start "EasySorting" cmd /k "cd /d ""%backend_dir%"" && %python_cmd% -m uvicorn main:app --host 127.0.0.1 --port 8000"
 timeout /t 3 /nobreak > nul
 start "" "http://127.0.0.1:8000"
+timeout /t 2 /nobreak > nul
+powershell -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait('^+{r}')"
 echo Done. Close this window to keep the server running.
 endlocal

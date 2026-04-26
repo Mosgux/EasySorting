@@ -44,9 +44,15 @@ def health():
 
 
 if FRONTEND_DIST_DIR.exists():
+    NO_CACHE_HEADERS = {
+        "Cache-Control": "no-cache, no-store, must-revalidate",
+        "Pragma": "no-cache",
+        "Expires": "0",
+    }
+
     @app.get("/", include_in_schema=False)
     def serve_root():
-        return FileResponse(FRONTEND_DIST_DIR / "index.html")
+        return FileResponse(FRONTEND_DIST_DIR / "index.html", headers=NO_CACHE_HEADERS)
 
 
     @app.get("/{full_path:path}", include_in_schema=False)
@@ -61,6 +67,6 @@ if FRONTEND_DIST_DIR.exists():
             raise HTTPException(status_code=404, detail="Not Found") from exc
 
         if asset_path.is_file():
-            return FileResponse(asset_path)
+            return FileResponse(asset_path, headers=NO_CACHE_HEADERS)
 
-        return FileResponse(FRONTEND_DIST_DIR / "index.html")
+        return FileResponse(FRONTEND_DIST_DIR / "index.html", headers=NO_CACHE_HEADERS)
